@@ -15,7 +15,7 @@ WIDTH = 1400  # st.slider(label='plot width', min_value=500, max_value=1500, val
 
 @st.cache_data()
 def load_wos_data():
-    data = pd.read_json('data/WOS数据集/result.json', orient='records')
+    data = pd.read_json('result.json', orient='records')
     data = data.applymap(lambda e: json.loads(e))
     return data
 
