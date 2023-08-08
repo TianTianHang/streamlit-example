@@ -1,8 +1,9 @@
 import json
-
+import plotly.express as px
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
 
 st.set_page_config(
     page_title="Wos",
@@ -10,7 +11,7 @@ st.set_page_config(
     layout='wide'
 )
 st.title('Wos Dataset Abstract')
-WIDTH = 1400  # st.slider(label='plot width', min_value=500, max_value=1500, value=1000)
+WIDTH = 1000  # st.slider(label='plot width', min_value=500, max_value=1500, value=1000)
 
 
 @st.cache_data()
@@ -27,9 +28,9 @@ def create_heatmap_plot(data, width):
     novel_words = data["novel"]
 
     # 整理数据为热力图所需格式
-    word_list = get_all_words(data)*2
-    types = ["new"] * len(all_words) + ["novel"] * len(all_words)
-    counts = [new_words.get(w, 0) for w in all_words] + [novel_words.get(w, 0) for w in all_words]
+    word_list = get_all_words(data) * 2
+    types = ["new"] * len(word_list) + ["novel"] * len(word_list)
+    counts = [new_words.get(w, 0) for w in word_list] + [novel_words.get(w, 0) for w in word_list]
 
     heatmap_data = {
         "Word": word_list,
@@ -59,68 +60,105 @@ def create_heatmap_plot(data, width):
 
 
 @st.cache_data
-def create_scatter_plot(width):
-    data = load_wos_data()[0]
-    # 整理数据
-    years = [entry["year"] for entry in data]
-    new_word_counts = [sum(entry["new"].values()) for entry in data]
-    novel_word_counts = [sum(entry["novel"].values()) for entry in data]
-    # 创建图表
-    fig = go.Figure()
+def create_scatter_plot(title, width, words, *datas):
+    # 将数据整理为适用于 Plotly Express 的DataFrame
+    data_list = []
 
-    # 添加"new"类型的平均单词数线
-    trace_new = go.Scatter(x=years, y=new_word_counts, mode='lines+markers',
-                           name="'new' Average Words per Article")
-    fig.add_trace(trace_new)
+    for data, word in zip(datas, words):
+        years = [entry["year"] for entry in data]
+        new_word_counts = [sum(entry["new"].values()) for entry in data]
+        novel_word_counts = [sum(entry["novel"].values()) for entry in data]
 
-    # 添加"novel"类型的平均单词数线
-    trace_novel = go.Scatter(x=years, y=novel_word_counts, mode='lines+markers',
-                             name="'novel' Average Words per Article")
-    fig.add_trace(trace_novel)
+        for year, new_count, novel_count in zip(years, new_word_counts, novel_word_counts):
+            data_list.append({
+                "Year": year,
+                "WordType": "new",
+                "WordCount": new_count,
+                "Word": word
+            })
+            data_list.append({
+                "Year": year,
+                "WordType": "novel",
+                "WordCount": novel_count,
+                "Word": word
+            })
 
-    fig.add_trace(go.Scatter(
-        x=years + years[::-1],
-        y=new_word_counts + [x - 1500 for x in new_word_counts][::-1],
-        fill='toself',
-        fillcolor='rgba(0,100,80,0.2)',
-        line=dict(color='rgba(255,255,255,0)'),
-        showlegend=False,
-        hoverinfo='none'
-    ))
+    df = pd.DataFrame(data_list)
 
-    fig.add_trace(go.Scatter(
-        x=years + years[::-1],
-        y=[x + 1500 for x in new_word_counts] + new_word_counts[::-1],
-        fill='toself',
-        fillcolor='rgba(0,100,80,0.2)',
-        line=dict(color='rgba(255,255,255,0)'),
-        showlegend=False,
-        hoverinfo='none'
-    ))
-    fig.add_trace(go.Scatter(
-        x=years + years[::-1],
-        y=novel_word_counts + [x - 1500 for x in novel_word_counts][::-1],
-        fill='toself',
-        fillcolor='rgba(0,100,80,0.2)',
-        line=dict(color='rgba(255,255,255,0)'),
-        showlegend=False,
-        hoverinfo='none'
-    ))
+    # 使用 Plotly Express 进行绘图
+    fig = px.line(df, x='Year', y='WordCount', color='WordType', title=title,
+                  markers=True, symbol='Word')
+    # 设置不同的标记样式
+    for word in df['Word'].unique():
+        fig.update_traces(marker=dict(symbol='diamond', size=10), selector=dict(name=word))
 
-    fig.add_trace(go.Scatter(
-        x=years + years[::-1],
-        y=[x + 1500 for x in novel_word_counts] + novel_word_counts[::-1],
-        fill='toself',
-        fillcolor='rgba(0,100,80,0.2)',
-        line=dict(color='rgba(255,255,255,0)'),
-        showlegend=False,
-        hoverinfo='none'
-    ))
+    # fig = go.Figure()
+    # for data, word in zip(datas, words):
+    #     # 整理数据
+    #     years = [entry["year"] for entry in data]
+    #     new_word_counts = [sum(entry["new"].values()) for entry in data]
+    #     novel_word_counts = [sum(entry["novel"].values()) for entry in data]
+    #     gap = sum(new_word_counts + novel_word_counts) / len(new_word_counts + novel_word_counts) / 4
+    #     # 添加"new"类型的单词数线
+    #     trace_new = go.Line(x=years, y=new_word_counts, mode='lines+markers',
+    #                         name=f"'new'-{word}", legendgroup=f'new-{word}',
+    #                         marker=dict(size=8, symbol='diamond'),)
+    #     fig.add_trace(trace_new)
+    #
+    #     # 添加"novel"类型的单词数线
+    #     trace_novel = go.Line(x=years, y=novel_word_counts, mode='lines+markers',
+    #                           name=f"'novel'-{word}", legendgroup=f'novel--{word}',
+    #                           marker=dict(size=8, symbol='circle'))
+    #     fig.add_trace(trace_novel)
+
+    # fig.add_trace(go.Scatter(
+    #     x=years + years[::-1],
+    #     y=new_word_counts + [x - gap for x in new_word_counts][::-1],
+    #     fill='toself',
+    #     fillcolor='rgba(0,100,80,0.2)',
+    #     line=dict(color='rgba(255,255,255,0)'),
+    #     showlegend=False,
+    #     hoverinfo='none',
+    #     legendgroup=f'new-{word}'
+    # ))
+    #
+    # fig.add_trace(go.Scatter(
+    #     x=years + years[::-1],
+    #     y=[x + gap for x in new_word_counts] + new_word_counts[::-1],
+    #     fill='toself',
+    #     fillcolor='rgba(0,100,80,0.2)',
+    #     line=dict(color='rgba(255,255,255,0)'),
+    #     showlegend=False,
+    #     hoverinfo='none',
+    #     legendgroup=f'new-{word}'
+    # ))
+    # fig.add_trace(go.Scatter(
+    #     x=years + years[::-1],
+    #     y=novel_word_counts + [x - gap for x in novel_word_counts][::-1],
+    #     fill='toself',
+    #     fillcolor='rgba(0,100,80,0.2)',
+    #     line=dict(color='rgba(255,255,255,0)'),
+    #     showlegend=False,
+    #     hoverinfo='none',
+    #     legendgroup=f'novel--{word}'
+    # ))
+    #
+    # fig.add_trace(go.Scatter(
+    #     x=years + years[::-1],
+    #     y=[x + gap for x in novel_word_counts] + novel_word_counts[::-1],
+    #     fill='toself',
+    #     fillcolor='rgba(0,100,80,0.2)',
+    #     line=dict(color='rgba(255,255,255,0)'),
+    #     showlegend=False,
+    #     hoverinfo='none',
+    #     legendgroup=f'novel--{word}'
+    # ))
+
     # 设置图表布局
     fig.update_layout(
-        title="Average Word Counts for 'new' and 'novel' Pairings per Article Over the Years",
+        title=title,
         xaxis_title="Year",
-        yaxis_title="Average Word Count per Article",
+        yaxis_title=" Word Count",
         showlegend=True,  # 显示图例
         width=width
     )
@@ -134,18 +172,45 @@ def create_bar_plot(data, top, width):
     # 取出前十的词汇和计数
     top_new_counts = sorted(new_word_counts.items(), key=lambda x: x[1], reverse=True)[:top]
     top_novel_counts = sorted(novel_word_counts.items(), key=lambda x: x[1], reverse=True)[:top]
-    fig = go.Figure()
+    fig = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        specs=[[{"type": "bar"}],
+               [{"type": "bar"}],
+               [{"type": "table"}],
+               ],
+        subplot_titles=('new', 'novel')
+    )
+    new_header = [word for word, count in top_new_counts]
+    novel_header = [word for word, count in top_novel_counts]
+    merged_header = new_header + [item for item in novel_header if item not in new_header]
+
     # 添加"new"类型的计数子图
-    fig.add_trace(go.Bar(x=[word for word, count in top_new_counts],
-                         y=[count for word, count in top_new_counts], name="new"))
+    new_trace = go.Bar(
+        x=merged_header,
+        y=[new_word_counts.get(word, 0) for word in merged_header],
+        name="new",
+        marker=dict(color=['red' if word in new_header else 'green' for word in merged_header])
+    )
+    fig.add_trace(new_trace, row=1, col=1)
 
     # 添加"novel"类型的计数子图
-    fig.add_trace(go.Bar(x=[word for word, count in top_novel_counts],
-                         y=[count for word, count in top_novel_counts], name="novel"))
+    novel_trace = go.Bar(
+        x=merged_header,
+        y=[novel_word_counts.get(word, 0) for word in merged_header],
+        name="novel",
+        marker=dict(color=['blue' if word in novel_header else 'green' for word in merged_header])
+    )
+    fig.add_trace(novel_trace, row=2, col=1)
+    cells = [[new_word_counts.get(word, 0), novel_word_counts.get(word, 0)] for word in merged_header]
+    fig.add_trace(go.Table(header=dict(values=[word for word in merged_header]),
+                           cells=dict(values=cells)), row=3, col=1)
 
     fig.update_layout(title_text=f"Top{top} Word Counts Comparison for {data['year']}",
                       showlegend=True,
-                      width=width
+                      width=width,
+                      height=1000
                       )
     return fig
 
@@ -181,16 +246,35 @@ def create_pie_plot(data, selected_word, width):
     return fig
 
 
-st.plotly_chart(create_scatter_plot(WIDTH))
+@st.cache_data
+def get_word_filter_data(word):
+    word_filter_data = []
+    for data in load_wos_data()[0]:
+        data['new'] = {word: data['new'].get(word, 0)}
+        data['novel'] = {word: data['novel'].get(word, 0)}
+        word_filter_data.append(data)
+    return word_filter_data
+
+
 wos_data = load_wos_data()
-current_data = st.select_slider(label="select a time", options=wos_data, key='wos_select',
-                                format_func=lambda e: e['year'])
-col1, col2 = st.columns(2)
-with col1:
-    top = st.number_input(label='input number of top', value=10)
-    st.plotly_chart(create_bar_plot(current_data, top, WIDTH / 2))
-with col2:
-    all_words = get_all_words(current_data)
-    word = st.selectbox(label='input a word', options=all_words)
-    st.plotly_chart(create_pie_plot(current_data, word, WIDTH / 2))
-st.plotly_chart(create_heatmap_plot(current_data, WIDTH))
+st.plotly_chart(create_scatter_plot(" Word Counts for 'new' and 'novel' Over the Years",
+                                    WIDTH, 'all_words', wos_data[0]))
+current_data_for_word = st.sidebar.selectbox(label="select a time for word selector", options=wos_data,
+                                             format_func=lambda e: e['year'])
+all_words = get_all_words(current_data_for_word)
+words = st.multiselect(label=f'select a word from {current_data_for_word["year"]}', options=all_words,
+                       key='word_select')
+words = words if words else ['method', 'approach']
+word_filter_data = [get_word_filter_data(word) for word in words]
+word_fig = create_scatter_plot(f" '{','.join(words)}' Counts for 'new' and 'novel' Over the Years", WIDTH,
+                               words, *word_filter_data)
+st.plotly_chart(word_fig)
+
+current_data = st.sidebar.select_slider(label="select a time", options=wos_data, key='wos_select',
+                                        format_func=lambda e: e['year'])
+
+top = st.number_input(label='input number of top', value=5)
+st.plotly_chart(create_bar_plot(current_data, top, WIDTH))
+
+pie_word = st.selectbox(label=f'select a word for pie', options=get_all_words(current_data))
+st.plotly_chart(create_pie_plot(current_data, pie_word, WIDTH))
