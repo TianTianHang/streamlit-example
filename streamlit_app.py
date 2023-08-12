@@ -16,10 +16,16 @@ WIDTH = 1000  # st.slider(label='plot width', min_value=500, max_value=1500, val
 
 @st.cache_data()
 def load_wos_data():
-    data = pd.read_json('data/wos/new_novel_counts.json', orient='records')
-    data = data.applymap(lambda e: json.loads(e))
-    return data
+    with open('data/wos/new_novel_counts_filter.json', 'r') as f:
+        wos_data = json.load(f)
 
+    return wos_data
+@st.cache_data()
+def load_all_words():
+    with open('data/wos/all_words.json', 'r') as f:
+        all_words = json.load(f)
+
+    return all_words
 
 @st.cache_data()
 def create_heatmap_plot(data, width):
@@ -249,7 +255,7 @@ def create_pie_plot(data, selected_word, width):
 @st.cache_data
 def get_word_filter_data(word):
     word_filter_data = []
-    for data in load_wos_data()[0]:
+    for data in load_wos_data():
         data['new'] = {word: data['new'].get(word, 0)}
         data['novel'] = {word: data['novel'].get(word, 0)}
         word_filter_data.append(data)
@@ -258,17 +264,18 @@ def get_word_filter_data(word):
 
 wos_data = load_wos_data()
 st.plotly_chart(create_scatter_plot(" Word Counts for 'new' and 'novel' Over the Years",
-                                    WIDTH, 'all_words', wos_data[0]))
-current_data_for_word = st.sidebar.selectbox(label="select a time for word selector", options=wos_data,
-                                             format_func=lambda e: e['year'])
-all_words = get_all_words(current_data_for_word)
-words = st.multiselect(label=f'select a word from {current_data_for_word["year"]}', options=all_words,
+                                    WIDTH, 'all_words', wos_data))
+
+all_words = load_all_words()
+words = st.multiselect(label=f'select a word', options=all_words,
                        key='word_select')
 words = words if words else ['method', 'approach']
 word_filter_data = [get_word_filter_data(word) for word in words]
 word_fig = create_scatter_plot(f" '{','.join(words)}' Counts for 'new' and 'novel' Over the Years", WIDTH,
                                words, *word_filter_data)
 st.plotly_chart(word_fig)
+
+
 
 current_data = st.sidebar.select_slider(label="select a time", options=wos_data, key='wos_select',
                                         format_func=lambda e: e['year'])
